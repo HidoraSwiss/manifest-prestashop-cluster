@@ -1,0 +1,90 @@
+jpsType: update
+id: mysql-auto-cluster
+name: Scalable MySQL Cluster with Load Balancing
+description:
+  text: Ready-to-work scalable MySQL Cluster with master-slave asynchronous replication
+    and ProxySQL load balancer in front of it. Is supplied with embedded Orchestrator
+    GUI for convenient cluster management and provides even load distribution, slaves
+    healthcheck and autodiscovery of newly added DB nodes
+  short: Scalable MySQL cluster with ProxySQL for even load distribution
+baseUrl: https://raw.githubusercontent.com/jelastic-jps/mysql-cluster/master/addons/auto-clustering
+logo: https://raw.githubusercontent.com/jelastic-jps/mysql-cluster/master/images/mysql-logo.png
+
+settings:
+  fields:
+    - type: string
+      name: DB_USER
+      default: jelastic-${fn.random}
+    - type: string
+      name: DB_PASS
+      default: ${fn.password(20)}
+      
+globals:
+  path: https://raw.githubusercontent.com/jelastic-jps/mysql-cluster/master/mysql-cluster-orchestrator
+  db_user: ${settings.DB_USER}
+  db_pass: ${settings.DB_PASS}
+  repl_user: repl-${fn.random}
+  repl_pass: ${fn.password(20)}
+  
+onInstall:
+  if (nodes.proxy):
+  - cleanCluster
+  - setupCluster
+  if (!nodes.proxy):
+    if (nodes.sqldb.length > 1): setupCluster
+    
+onAfterScaleOut[sqldb]:
+  if (!nodes.proxy): setupCluster
+  
+onAfterClone:
+  install:
+    jps: "${baseUrl}/auto-cluster.jps?_r=${fn.random}"
+    envName: "${event.response.env.envName}"
+    
+actions:
+  cleanCluster:
+    log: " -- TEST -- "
+    
+  setupCluster:
+  - if (!nodes.proxy):
+      addNodes:
+        cloudlets: 8
+        displayName: ProxySQL
+        nodeType: docker
+        nodeGroup: proxy
+        dockerName: jelastic/proxysql
+        dockerTag: latest
+        metadata:
+          layer: proxy
+          
+  - installJps:
+      jps: "${globals.path}/scripts/cluster-configuration.jps"
+      settings:
+        path: "${globals.path}"
+        db_user: "${globals.db_user}"
+        db_pass: "${globals.db_pass}"
+        
+  - forEach(a:nodes.sqldb):
+      if (${@a.ismaster}):
+        forEach(nodes.sqldb):
+          if (!${@i.ismaster}):
+            cmd [${@i.id}]:
+            - 'mysql -u${globals.db_user} -p${globals.db_pass} -e "STOP SLAVE; RESET
+              SLAVE" '
+            - mysqlreplicate --master=${globals.db_user}:${globals.db_pass}@node${@a.id}:3306
+              --slave=${globals.db_user}:${globals.db_pass}@${@i.intIP}:3306 --rpl-user=${globals.repl_user}:${globals.repl_pass}
+              
+  - installJps:
+      jps: "${globals.path}/scripts/proxy-configuration.jps"
+      settings:
+        path: "${globals.path}"
+        db_user: "${globals.db_user}"
+        db_pass: "${globals.db_pass}"
+        
+  - installJps:
+      jps: "${globals.path}/scripts/orchestrator-configuration.jps"
+      settings:
+        path: "${globals.path}"
+        db_user: "${globals.db_user}"
+        db_pass: "${globals.db_pass}"
+
