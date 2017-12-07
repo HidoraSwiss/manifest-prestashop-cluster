@@ -57,6 +57,8 @@ onInstall:
         DB_PASS: ${globals.DB_PASS}
   
   - log: Configure MySQL
+  - cmd[${nodes.sqldb[0]}]:
+    - echo "CREATE DATABASE prestashop" | mysql -u ${globals.DB_USER} -p${globals.DB_PASS}
   - configMysql
  
   - log: CP Layer Setup
@@ -73,8 +75,9 @@ onInstall:
     - chown 700:700 -R /data
     
   - log: Install PrestaShop
-  - cmd[${nodes.cp[0].id}]:
-    - php install/index_cli.php --db_create=1 --domain=${env.domain} --db_server=${nodes.proxy[0].intIP} --db_name=prestashop --db_user=${globals.DB_USER} --db_password=${globals.DB_PASS} --email=${user.email} --password=${globals.PRESTASHOP_PASS}
+  - cmd[]:
+  - installAddon:
+      id: installPS
 
 onAfterRestartNode [sqldb]:
   configMysql
@@ -89,6 +92,14 @@ actions:
       - export SQL_MODE='NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION'
       - echo "SET GLOBAL sql_mode = '$SQL_MODE';" | mysql -u ${globals.DB_USER} -p${globals.DB_PASS}
       - echo "SET SESSION sql_mode = '$SQL_MODE';" | mysql -u ${globals.DB_USER} -p${globals.DB_PASS}
+
+addons:
+  - id: installPS
+    name: installPS
+    onInstall:
+     - cmd[${nodes.cp[0].id}]:
+     - cd /var/www/webroot/ROOT
+     - php install/index_cli.php --domain=${env.domain} --db_server=${nodes.proxy[0].intIP} --db_name=prestashop --db_user=${globals.DB_USER} --db_password=${globals.DB_PASS} --email=${user.email} --password=${globals.PRESTASHOP_PASS}
 
 success: |
   Installed
