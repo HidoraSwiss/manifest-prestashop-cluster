@@ -75,6 +75,7 @@ onInstall:
     - cd /tmp
     - wget https://github.com/PrestaShop/PrestaShop/releases/download/1.7.2.4/prestashop_1.7.2.4.zip && unzip *.zip
     - mv prestashop.zip /data && cd /data && unzip prestashop.zip && rm prestashop.zip
+    - mv /data/admin /data/p-admin
     - chown 700:700 -R /data
 
   - log: Install PrestaShop
@@ -93,13 +94,14 @@ actions:
     cmd[${this.nodeId}]:
       - wget https://raw.githubusercontent.com/jelastic-jps/wordpress-cluster/master/configs/nginx/nginx.conf -O /etc/nginx/nginx.conf
       - wget ${globals.PATH}/config/nginx.conf -O /etc/nginx/conf.d/default.conf
+      # - wget https://raw.githubusercontent.com/jelastic-jps/wordpress-cluster/master/configs/nginx/default.conf -O /etc/nginx/conf.d/default.conf
       - echo -e "extension=gd.so\nextension=memcached.so" >> /etc/php.ini
       - sudo service php-fpm reload
       - sudo service nginx reload
 
 success: |
   # PrestaShop installed
-  Your PrestaShop has been installed on [${env.domain}](${env.domain}).
+  Your PrestaShop has been installed on [${env.domain}](https://${env.domain}).
 
   **E-mail:** ${user.email}
 
