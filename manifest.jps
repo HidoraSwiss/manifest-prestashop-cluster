@@ -75,7 +75,7 @@ onInstall:
     - cd /tmp
     - wget https://github.com/PrestaShop/PrestaShop/releases/download/1.7.2.4/prestashop_1.7.2.4.zip && unzip *.zip
     - mv prestashop.zip /data && cd /data && unzip prestashop.zip && rm prestashop.zip
-    - mv /data/admin /data/p-admin
+    - sed -i "s/\$rand = 'admin'/\$rand = 'ps-admin';\/\//g" /data/controllers/admin/AdminLoginController.php
     - chown 700:700 -R /data
 
   - log: Install PrestaShop
