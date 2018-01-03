@@ -1,6 +1,6 @@
 type: install
 version: 1.4
-name: PrestaShop Cluster
+name: PrestaShop
 displayName: PrestaShop Cluster
 homepage: https://www.prestashop.com/
 logo: https://www.prestashop.com/sites/all/themes/prestashop/images/preston-logo@2x.png
@@ -13,13 +13,18 @@ globals:
   PRESTASHOP_PASS: ${fn.password(20)}
 
 nodes:
+  - nodeType: nginx
+    count: 1
+    cloudlets: 8
+    nodeGroup: bl
+    displayName: Load balancer
+
   - nodeType: nginxphp
-    displayName: AppServer
     count: 2
-    cloudlets: 16
+    cloudlets: 8
     nodeGroup: cp
-    links:
-      - sqldb:db
+    links: sqldb:DB
+    displayName: "AppServer"
     volumes:
       - /var/www/webroot/ROOT
     volumeMounts:
@@ -33,39 +38,37 @@ nodes:
     nodeGroup: storage
     displayName: Storage
 
-  - nodeType: nginx
-    count: 2
-    cloudlets: 8
-    nodeGroup: bl
-    displayName: Load balancer
-    
   - nodeType: mysql
     count: 2
     cloudlets: 8
     nodeGroup: sqldb
     displayName: Database
 
+onAfterScaleOut [cp]:
+  forEach(event.response.nodes):
+    cmd [${@i.id}]: sudo service nginx reload
+    setNodeDisplayName [${@i.id}]: AppServer
+
+onAfterScaleOut [bl]:
+  forEach(event.response.nodes):
+    setNodeDisplayName [${@i.id}]: Load balancer
+
 onInstall:
   - log: Auto Scaling Triggers
   - script: ${globals.PATH}/scripts/addTriggers.js
-  
-  - log: Install MySQL cluster
+
+  - log: DB Multi-Master Cluster Setup
   - install:
-      jps: ${globals.PATH}/auto-cluster.jps
+      jps: https://raw.githubusercontent.com/jelastic-jps/mysql-cluster/master/scripts/multimaster-configuration.jps
       settings:
-        DB_USER: ${globals.DB_USER}
-        DB_PASS: ${globals.DB_PASS}
-  
-  - log: Configure MySQL
-  - cmd[${nodes.sqldb[0]}]:
-    - echo "CREATE DATABASE prestashop" | mysql -u ${globals.DB_USER} -p${globals.DB_PASS}
-  - configMysql
- 
+        db_user: ${globals.DB_USER}
+        db_pass: ${globals.DB_PASS}
+        custom_conf: https://raw.githubusercontent.com/jelastic-jps/wordpress-cluster/master/configs/mysql/mysql.cnf
+
   - log: CP Layer Setup
   - forEach(nodes.cp):
       setupNode:
         nodeId: ${@i.id}
-        intIP: ${@i.intIP}
 
   - log: Download and unpack PrestaShop
   - cmd[storage]:
@@ -73,39 +76,31 @@ onInstall:
     - wget https://github.com/PrestaShop/PrestaShop/releases/download/1.7.2.4/prestashop_1.7.2.4.zip && unzip *.zip
     - mv prestashop.zip /data && cd /data && unzip prestashop.zip && rm prestashop.zip
     - chown 700:700 -R /data
-    
-  - log: Install PrestaShop
-  - cmd[]:
-  - installAddon:
-      id: installPS
 
-onAfterRestartNode [sqldb]:
-  configMysql
+  - log: Install PrestaShop
+  - cmd[${nodes.cp[0].id}]:
+     - cd /var/www/webroot/ROOT
+     - php install/index_cli.php --db_create=1 --domain=${env.domain} --db_server=DB --db_name=prestashop --db_user=${globals.DB_USER} --db_password=${globals.DB_PASS} --email=${user.email} --password=${globals.PRESTASHOP_PASS}
+     - rm -r install/
+     # http://doc.prestashop.com/display/PS16/Installing+PrestaShop+using+the+command-line+script
+
+  - log: Configure DB load-balancing
+  - cmd[storage]:
+      - "sed -i \"s/'DB'/(rand(0,2) > 1 ? 'DB_1' : 'DB_2')/g\" /data/app/config/parameters.php"
 
 actions:
   setupNode:
     cmd[${this.nodeId}]:
+      - wget https://raw.githubusercontent.com/jelastic-jps/wordpress-cluster/master/configs/nginx/nginx.conf -O /etc/nginx/nginx.conf
+      - wget ${globals.PATH}/config/nginx.conf -O /etc/nginx/conf.d/default.conf
       - echo -e "extension=gd.so\nextension=memcached.so" >> /etc/php.ini
-      - sudo service nginx restart
-  configMysql:
-    cmd[sqldb]:
-      - export SQL_MODE='NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION'
-      - echo "SET GLOBAL sql_mode = '$SQL_MODE';" | mysql -u ${globals.DB_USER} -p${globals.DB_PASS}
-      - echo "SET SESSION sql_mode = '$SQL_MODE';" | mysql -u ${globals.DB_USER} -p${globals.DB_PASS}
-
-addons:
-  - id: installPS
-    name: installPS
-    onInstall:
-     - cmd[${nodes.cp[0].id}]:
-     - cd /var/www/webroot/ROOT
-     - php install/index_cli.php --domain=${env.domain} --db_server=${nodes.proxy[0].intIP} --db_name=prestashop --db_user=${globals.DB_USER} --db_password=${globals.DB_PASS} --email=${user.email} --password=${globals.PRESTASHOP_PASS}
+      - sudo service php-fpm reload
+      - sudo service nginx reload
 
 success: |
-  Installed
-  
-  DB_USER: ${globals.DB_USER}
-  DB_PASS: ${globals.DB_PASS}
-  PRESTA_EMAIL: ${user.email}
-  PRESTA_PASS: ${globals.PRESTASHOP_PASS}
-  PROXY IP : ${nodes.proxy[0].intIP}
+  # PrestaShop installed
+  Your PrestaShop has been installed on [${env.domain}](${env.domain}).
+
+  **E-mail:** ${user.email}
+
+  **Password:**  ${globals.PRESTASHOP_PASS}
