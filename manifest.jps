@@ -75,7 +75,7 @@ onInstall:
     - cd /tmp
     - wget https://github.com/PrestaShop/PrestaShop/releases/download/1.7.2.4/prestashop_1.7.2.4.zip && unzip *.zip
     - mv prestashop.zip /data && cd /data && unzip prestashop.zip && rm prestashop.zip
-    - wget ${globals.PATH}/config/db_slave_server.inc.php -O /data/config/db_slave_server.inc.php
+    - wget ${globals.PATH}/config/db_slave_server.inc.php -O /data/config/db_slave_server.inc.php   # https://dh42.com/blog/prestashop-slave-databases/
     - sed -i "s/DBUSER/${globals.DB_USER}/g" /data/config/db_slave_server.inc.php
     - sed -i "s/DBPASS/${globals.DB_PASS}/g" /data/config/db_slave_server.inc.php
     - sed -i "s/\$rand = 'admin'/\$rand = 'ps-admin';\/\//g" /data/controllers/admin/AdminLoginController.php
@@ -101,7 +101,7 @@ success: |
   # PrestaShop installed
   Your PrestaShop has been installed on [${env.domain}](https://${env.domain}).
 
-  > On the first connexion, you need to use this link to access to the admin dashboard : [${env.domain}/admin](https://${env.domain}/admin).
+  > On the first connection, you need to use this link to access to the admin dashboard : [${env.domain}/admin](https://${env.domain}/admin).
   > Then, you can use this one : [${env.domain}/ps-admin](https://${env.domain}/ps-admin).
 
   **E-mail:** ${user.email}
