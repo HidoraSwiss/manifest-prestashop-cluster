@@ -75,6 +75,9 @@ onInstall:
     - cd /tmp
     - wget https://github.com/PrestaShop/PrestaShop/releases/download/1.7.2.4/prestashop_1.7.2.4.zip && unzip *.zip
     - mv prestashop.zip /data && cd /data && unzip prestashop.zip && rm prestashop.zip
+    - wget ${globals.PATH}/config/db_slave_server.inc.php -O /data/app/config/db_slave_server.inc.php
+    - sed -i "s/DBUSER/${globals.DB_USER}/g" /data/app/config/db_slave_server.inc.php
+    - sed -i "s/DBPASS/${globals.DB_PASS}/g" /data/app/config/db_slave_server.inc.php
     - sed -i "s/\$rand = 'admin'/\$rand = 'ps-admin';\/\//g" /data/controllers/admin/AdminLoginController.php
     - chown 700:700 -R /data
 
@@ -85,9 +88,9 @@ onInstall:
      - rm -r install/
      # Doc for PrestaShop CLI installer : http://doc.prestashop.com/display/PS16/Installing+PrestaShop+using+the+command-line+script
 
-  - log: Configure DB load-balancing
-  - cmd[storage]:
-      - "sed -i \"s/'DB'/(rand(0,2) > 1 ? 'DB_1' : 'DB_2')/g\" /data/app/config/parameters.php" # Could be better
+  # - log: Configure DB load-balancing
+  # - cmd[storage]:
+  #     - "sed -i \"s/'DB'/(rand(0,2) > 1 ? 'DB_1' : 'DB_2')/g\" /data/app/config/parameters.php" # Could be better
 
 actions:
   setupNode:
@@ -102,7 +105,6 @@ success: |
   # PrestaShop installed
   Your PrestaShop has been installed on [${env.domain}](https://${env.domain}).
   You can access to the admin dashboard with [${env.domain}/ps-admin](https://${env.domain}/ps-admin)
-
 
   **E-mail:** ${user.email}
 
